@@ -78,8 +78,12 @@ function parsePckIndex(buffer: ArrayBuffer): { entries: PckEntry[]; packVersion:
   let cursor = 84;
 
   // Godot 4 extras: flags (uint32) + files_base (uint64)
+  // files_base must be added to every entry offset.
+  let filesBase = 0;
   if (packVersion >= 2) {
-    cursor += 4 + 8;
+    cursor += 4; // skip flags
+    filesBase = Number(view.getBigUint64(cursor, true));
+    cursor += 8;
   }
 
   const fileCount = view.getUint32(cursor, true);
@@ -98,7 +102,8 @@ function parsePckIndex(buffer: ArrayBuffer): { entries: PckEntry[]; packVersion:
     cursor += pathLen;
 
     // offset and size are uint64; convert via BigInt then to number (safe < 2^53)
-    const offset = Number(view.getBigUint64(cursor, true));
+    // Add filesBase for Godot 4 packs (always 0 for Godot 3)
+    const offset = Number(view.getBigUint64(cursor, true)) + filesBase;
     cursor += 8;
 
     const size = Number(view.getBigUint64(cursor, true));
@@ -143,7 +148,7 @@ export async function importDungeondraftPack(
   const buffer = await file.arrayBuffer();
 
   // Parse the PCK index
-  const { entries } = parsePckIndex(buffer);
+  const { entries, packVersion } = parsePckIndex(buffer);
 
   // ── Locate and parse pack.json ──────────────────────────────────────────
   let meta: DungeondraftPackJson = {};
@@ -175,19 +180,44 @@ export async function importDungeondraftPack(
     }
   }
 
-  // ── Collect image entries (objects only) ────────────────────────────────
+  // Debug: log the full PCK manifest so issues can be diagnosed from the browser console.
+  if (typeof console !== 'undefined') {
+    console.group('[ShireMapper] Dungeondraft PCK import —', file.name);
+    console.log('Pack version:', packVersion, '| Total entries:', entries.length);
+    const imgPaths = entries.filter((e) => /\.(png|webp|jpg|jpeg)$/i.test(e.path));
+    console.log('Image entries:', imgPaths.length);
+    imgPaths.forEach((e) => console.log(' ', e.path));
+    console.groupEnd();
+  }
+
+  // ── Collect image entries ───────────────────────────────────────────────
+  // Use a top-level prefix check (not a substring) so that an object in
+  // res://objects/PackName/Paths/sign.png is NOT confused with the
+  // res://paths/ brush-texture directory.
+  const TOP_LEVEL_SKIP = [
+    'res://textures/',
+    'res://patterns/',
+    'res://paths/',   // line/road brush textures
+    'res://walls/',   // wall brush textures
+  ];
+
   const imageEntries = entries.filter((e) => {
     const p = e.path.toLowerCase();
     if (!/\.(png|webp|jpg|jpeg)$/i.test(p)) return false;
-    // Skip textures, portals, paths (line textures), walls
-    const skip = ['/textures/', '/patterns/', '/portals/', '/paths/', '/walls/'];
-    return !skip.some((s) => p.includes(s));
+    // Drop the pack's own preview thumbnail
+    const fileName = p.split('/').at(-1) ?? '';
+    if (/^preview\.(png|webp|jpg|jpeg)$/.test(fileName)) return false;
+    // Drop brush/fill textures that live at the top-level directories
+    if (TOP_LEVEL_SKIP.some((s) => p.startsWith(s))) return false;
+    return true;
   });
 
   if (imageEntries.length === 0) {
     throw new Error(
       'Aucun asset image trouvé dans ce pack. ' +
-        `Le pack contient ${entries.length} fichier(s) au total.`,
+        `Le pack contient ${entries.length} fichier(s) au total (${
+          entries.filter((e) => /\.(png|webp|jpg|jpeg)$/i.test(e.path)).length
+        } images). Vérifiez la console du navigateur pour voir les chemins détectés.`,
     );
   }
 
