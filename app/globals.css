@@ -1,26 +1,55 @@
 @import "tailwindcss";
 
+/* ── ShireMapper design tokens ────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --sm-bg:          #1a1a2e;
+  --sm-surface:     #16213e;
+  --sm-surface-2:   #1e2a4a;
+  --sm-border:      #2a3a6a;
+  --sm-accent:      #d4844a;   /* warm amber – Nimblehold-inspired "cozy" feel */
+  --sm-accent-2:    #e8a558;
+  --sm-text:        #e8e0d0;   /* warm white */
+  --sm-text-muted:  #8a8070;
+  --sm-selection:   #4a9eff;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--sm-bg);
+  color: var(--sm-text);
+  font-family: "Inter", Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Warm scrollbar ──────────────────────────────────────────────────────── */
+::-webkit-scrollbar            { width: 6px; height: 6px; }
+::-webkit-scrollbar-track      { background: var(--sm-surface); }
+::-webkit-scrollbar-thumb      { background: var(--sm-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--sm-accent); }
+
+/* ── Utility classes ─────────────────────────────────────────────────────── */
+.cozy-panel {
+  background: var(--sm-surface);
+  border: 1px solid var(--sm-border);
+  border-radius: 8px;
+}
+
+/* Depth-layer badge (shown in PropertiesPanel) */
+.depth-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--sm-surface-2);
+  color: var(--sm-accent-2);
+  border: 1px solid var(--sm-border);
+}
+
+/* Subtle warm focus ring */
+:focus-visible {
+  outline: 2px solid var(--sm-accent);
+  outline-offset: 2px;
 }

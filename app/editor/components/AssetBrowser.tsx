@@ -37,10 +37,10 @@ function AssetThumb({ asset, isActive, onSelect }: AssetThumbProps) {
       title={asset.name}
       onClick={onSelect}
       className={[
-        'flex flex-col items-center gap-1 p-1 rounded transition-colors shrink-0',
+        'flex flex-col items-center gap-1 p-1 rounded transition-all duration-150 shrink-0',
         isActive
-          ? 'border-2 border-blue-400 bg-blue-900/30'
-          : 'border-2 border-transparent hover:border-[#0F3460] hover:bg-[#0F3460]/40',
+          ? 'border-2 border-amber-400 bg-amber-900/30 shadow-[0_0_8px_rgba(212,132,74,0.3)]'
+          : 'border-2 border-transparent hover:border-amber-700/50 hover:bg-amber-900/10 hover:shadow-[0_0_6px_rgba(212,132,74,0.15)]',
       ].join(' ')}
     >
       <img
@@ -51,7 +51,7 @@ function AssetThumb({ asset, isActive, onSelect }: AssetThumbProps) {
         className="w-16 h-16 object-contain rounded"
         draggable={false}
       />
-      <span className="text-xs text-gray-400 truncate max-w-[68px] leading-tight">
+      <span className={['text-xs truncate max-w-[68px] leading-tight', isActive ? 'text-amber-300' : 'text-gray-400'].join(' ')}>
         {asset.name}
       </span>
     </button>
@@ -77,12 +77,12 @@ export default function AssetBrowser() {
   return (
     <div
       className={[
-        'bg-[#16213E] border-t border-[#0F3460] flex flex-col transition-all duration-200',
+        'bg-[#16213E] border-t border-[#2a3a6a] flex flex-col transition-all duration-200',
         collapsed ? 'h-9' : 'h-[150px]',
       ].join(' ')}
     >
       {/* Header bar: category tabs + collapse toggle */}
-      <div className="flex items-center h-9 shrink-0 border-b border-[#0F3460] px-2 gap-1 overflow-x-auto scrollbar-none">
+      <div className="flex items-center h-9 shrink-0 border-b border-[#2a3a6a] px-2 gap-1 overflow-x-auto scrollbar-none">
         {/* Category tabs */}
         <div className="flex items-center gap-0.5 flex-1">
           {tabs.map((cat) => (
@@ -93,8 +93,8 @@ export default function AssetBrowser() {
               className={[
                 'px-2.5 py-1 rounded text-xs whitespace-nowrap transition-colors',
                 activeAssetCategory === cat
-                  ? 'bg-[#0F3460] text-gray-100 border border-[#E94560]/60'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#0F3460]/50',
+                  ? 'bg-amber-900/30 text-amber-300 border border-amber-600/50'
+                  : 'text-gray-400 hover:text-amber-200 hover:bg-amber-900/10',
               ].join(' ')}
             >
               {CATEGORY_LABELS[cat] ?? cat}
@@ -106,7 +106,7 @@ export default function AssetBrowser() {
         <button
           title={collapsed ? 'Expand asset browser' : 'Collapse asset browser'}
           onClick={() => setCollapsed((c) => !c)}
-          className="ml-auto text-gray-500 hover:text-gray-300 transition-colors shrink-0"
+          className="ml-auto text-gray-500 hover:text-amber-400 transition-colors shrink-0"
         >
           {collapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
@@ -115,11 +115,14 @@ export default function AssetBrowser() {
       {/* Asset grid */}
       {!collapsed && (
         <div className="flex-1 overflow-x-auto overflow-y-hidden">
-          <div className="flex items-start gap-2 px-2 py-1 h-full">
+          <div className="flex items-center gap-2 px-3 py-1 h-full">
             {currentAssets.length === 0 ? (
-              <p className="text-xs text-gray-600 self-center px-2">
-                No assets in this category.
-              </p>
+              <div className="flex flex-col items-center justify-center gap-1 w-full text-center">
+                <span className="text-2xl opacity-20">🗺️</span>
+                <p className="text-xs text-[#8a8070]">
+                  Choisissez une catégorie puis cliquez sur un asset pour le placer
+                </p>
+              </div>
             ) : (
               currentAssets.map((asset) => (
                 <AssetThumb

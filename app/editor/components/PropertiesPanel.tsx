@@ -3,7 +3,7 @@
 import { Trash2, FlipHorizontal, FlipVertical } from 'lucide-react';
 import { useMapStore } from '@/app/store/mapStore';
 import { useToolStore } from '@/app/store/toolStore';
-import type { ObjectNode, PathNode, PathType, PlotType, RoomType } from '@/app/types/map';
+import type { ObjectNode, PathNode, PathType, PlotType, RoomType, PlacementMode, DepthLayer } from '@/app/types/map';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared primitives

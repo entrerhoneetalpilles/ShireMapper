@@ -39,7 +39,7 @@ function IconButton({ onClick, disabled = false, title, children }: IconButtonPr
         'flex items-center justify-center w-9 h-9 rounded border transition-colors',
         disabled
           ? 'border-transparent text-gray-600 cursor-not-allowed'
-          : 'border-[#0F3460] text-gray-300 hover:bg-[#0F3460] hover:text-gray-100',
+          : 'border-[#2a3a6a] text-gray-400 hover:bg-amber-900/20 hover:border-amber-700/50 hover:text-amber-200',
       ].join(' ')}
     >
       {children}
@@ -97,12 +97,17 @@ export default function Header({
   }
 
   return (
-    <header className="flex items-center h-12 px-3 bg-[#16213E] border-b border-[#0F3460] shrink-0">
-      {/* Left: Logo */}
+    <header className="flex items-center h-12 px-3 bg-[#16213E] border-b border-[#2a3a6a] shrink-0">
+      {/* Left: Logo + tagline */}
       <div className="flex items-center gap-2 min-w-[160px]">
-        <span className="text-[#E94560] font-bold text-base tracking-tight select-none">
-          ShireMapper
-        </span>
+        <div className="flex flex-col leading-none">
+          <span className="text-amber-400 font-bold text-base tracking-tight select-none">
+            ShireMapper
+          </span>
+          <span className="text-[10px] text-amber-600/60 leading-none mt-0.5 select-none">
+            Fantasy Map Editor
+          </span>
+        </div>
       </div>
 
       {/* Center: Map name (editable) */}
@@ -115,13 +120,13 @@ export default function Header({
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commitEdit}
             onKeyDown={handleKeyDown}
-            className="bg-[#1A1A2E] border border-[#E94560] text-gray-100 text-sm rounded px-2 py-1 w-56 text-center focus:outline-none"
+            className="bg-[#1A1A2E] border border-amber-500/60 text-gray-100 text-sm rounded px-2 py-1 w-56 text-center focus:outline-none focus:border-amber-400"
           />
         ) : (
           <button
             title="Click to rename map"
             onClick={startEditing}
-            className="text-sm text-gray-200 hover:text-gray-100 px-3 py-1 rounded hover:bg-[#0F3460]/50 transition-colors max-w-xs truncate"
+            className="text-sm text-gray-200 hover:text-amber-200 px-3 py-1 rounded hover:bg-amber-900/20 transition-colors max-w-xs truncate"
           >
             {mapName}
           </button>
@@ -146,7 +151,7 @@ export default function Header({
           <Redo size={18} />
         </IconButton>
 
-        <div className="w-px h-6 bg-[#0F3460] mx-1" />
+        <div className="w-px h-6 bg-[#2a3a6a] mx-1" />
 
         <IconButton title="Save (Ctrl+S)" onClick={onSave}>
           <Download size={18} />

@@ -1,5 +1,6 @@
 // No 'use client' — pure PixiJS utility, not a React module.
 import type { MapDocument, MapNode, ObjectNode, PathNode, PlotNode } from '@/app/types/map';
+import type { DepthLayer } from '@/app/types/map';
 import { assetManifest } from '@/app/lib/assetManifest';
 import type { CanvasEngine } from './canvasEngine';
 import { ObjectNodeSprite } from './ObjectNode';
@@ -12,6 +13,14 @@ import { PlotNodeGraphics } from './PlotNode';
 
 type DisplayObject = ObjectNodeSprite | PathNodeGraphics | PlotNodeGraphics;
 
+const DEPTH_LAYER_ORDER: Record<DepthLayer, number> = {
+  ground: 0,
+  low: 1,
+  mid: 2,
+  high: 3,
+  overhead: 4,
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SceneManager
 // ─────────────────────────────────────────────────────────────────────────────
@@ -19,6 +28,8 @@ type DisplayObject = ObjectNodeSprite | PathNodeGraphics | PlotNodeGraphics;
 export class SceneManager {
   private engine: CanvasEngine;
   private displayObjects: Map<string, DisplayObject> = new Map();
+  /** nodeId → ObjectNode reference for lighting lookups */
+  private nodeCache: Map<string, ObjectNode> = new Map();
 
   constructor(engine: CanvasEngine) {
     this.engine = engine;
@@ -33,6 +44,7 @@ export class SceneManager {
     for (const [id, displayObj] of this.displayObjects) {
       if (!nodeIds.has(id)) {
         this.removeDisplayObject(id, displayObj);
+        this.nodeCache.delete(id);
       }
     }
 
@@ -55,6 +67,16 @@ export class SceneManager {
         // Create new display object
         this.createDisplayObject(node, doc);
       }
+
+      // Keep a reference to ObjectNode data for lighting
+      if (node.type === 'object') {
+        this.nodeCache.set(id, node as ObjectNode);
+      }
+    }
+
+    // Re-sort all layers by depth after sync
+    for (const layer of doc.layers) {
+      this.sortObjectsByDepth(layer.id);
     }
   }
 
@@ -102,6 +124,61 @@ export class SceneManager {
       }
     }
     return null;
+  }
+
+  // ── Depth sorting ────────────────────────────────────────────────────────────
+
+  /**
+   * Sort all ObjectNodeSprite children in a layer container by:
+   *   1. depthLayer (ground=0 … overhead=4)
+   *   2. then by node.y (painters algorithm — lower y = painted earlier)
+   * Assigns zIndex and calls container.sortChildren().
+   */
+  private sortObjectsByDepth(layerId: string): void {
+    const container = this.engine.getLayerContainer(layerId);
+    if (!container) return;
+
+    // Gather ObjectNodeSprite children with their sort key
+    const sprites: Array<{ sprite: ObjectNodeSprite; sortKey: number }> = [];
+
+    for (const child of container.children) {
+      if (child instanceof ObjectNodeSprite) {
+        const nodeData = this.nodeCache.get(child.nodeId);
+        const depthOrder = DEPTH_LAYER_ORDER[child._depthLayer] ?? 2;
+        // Combine depth layer (primary) with y position (secondary)
+        // Use 100000 as a large multiplier so depth layer always dominates
+        const y = nodeData?.y ?? child.y;
+        sprites.push({ sprite: child, sortKey: depthOrder * 100000 + y });
+      }
+    }
+
+    // Assign ascending zIndex values based on sort order
+    sprites.sort((a, b) => a.sortKey - b.sortKey);
+    sprites.forEach(({ sprite }, index) => {
+      sprite.zIndex = index;
+    });
+
+    container.sortableChildren = true;
+    container.sortChildren();
+  }
+
+  // ── Lighting ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Iterate all ObjectNodeSprites across all layers and update their shadow
+   * graphics according to the current sun parameters.
+   */
+  applyLighting(sunAngle: number, sunElevation: number, lightingEnabled: boolean): void {
+    for (const [id, displayObj] of this.displayObjects) {
+      if (!(displayObj instanceof ObjectNodeSprite)) continue;
+
+      const nodeData = this.nodeCache.get(id);
+      const elevationHeight = nodeData?.elevationHeight ?? 1;
+      const placementMode = nodeData?.placementMode ?? 'grounded';
+
+      displayObj.applyLighting(sunAngle, sunElevation, elevationHeight, placementMode);
+      displayObj.setLightingVisible(lightingEnabled);
+    }
   }
 
   // ── Private helpers ─────────────────────────────────────────────────────────
@@ -179,5 +256,6 @@ export class SceneManager {
       this.removeDisplayObject(id, displayObj);
     }
     this.displayObjects.clear();
+    this.nodeCache.clear();
   }
 }

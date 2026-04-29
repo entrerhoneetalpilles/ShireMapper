@@ -42,6 +42,9 @@ function createObjectNode(
     flipX: false,
     flipY: false,
     tintColor: null,
+    placementMode: 'grounded',
+    depthLayer: 'mid',
+    elevationHeight: 1,
   };
 }
 
@@ -77,6 +80,7 @@ function createPathNode(
       rightColor: '#00000000',
       blendWidth: 0,
     },
+    bridgeStyle: 'none',
   };
 }
 

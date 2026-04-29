@@ -1,18 +1,24 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useMapStore } from '@/app/store/mapStore';
 import { useToolStore } from '@/app/store/toolStore';
 import { useAtmosphereStore } from '@/app/store/atmosphereStore';
 import { useHistory } from '@/app/hooks/useHistory';
 import { useSaveLoad } from '@/app/hooks/useSaveLoad';
 import { useKeyboardShortcuts } from '@/app/hooks/useKeyboardShortcuts';
+import dynamic from 'next/dynamic';
 import Header from '@/app/editor/components/Header';
 import Toolbar from '@/app/editor/components/Toolbar';
 import { Canvas } from '@/app/editor/components/Canvas';
 import PropertiesPanel from '@/app/editor/components/PropertiesPanel';
 import LayersPanel from '@/app/editor/components/LayersPanel';
 import AssetBrowser from '@/app/editor/components/AssetBrowser';
+
+const AtmospherePanel = dynamic(
+  () => import('@/app/editor/components/AtmospherePanel'),
+  { ssr: false },
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Editor page
@@ -30,6 +36,15 @@ export default function EditorPage() {
   const setSelectedNodes = useMapStore((s) => s.setSelectedNodes);
   const nodes = useMapStore((s) => s.document.nodes);
   const layers = useMapStore((s) => s.document.layers);
+
+  // ── Atmosphere panel visibility ───────────────────────────────────────────
+  const [showAtmosphere, setShowAtmosphere] = useState(false);
+
+  useEffect(() => {
+    function handleToggle() { setShowAtmosphere((v) => !v); }
+    window.addEventListener('shiremapper:toggle-atmosphere', handleToggle);
+    return () => window.removeEventListener('shiremapper:toggle-atmosphere', handleToggle);
+  }, []);
 
   // Suppress unused-variable warnings for stores consumed only for side effects
   void useAtmosphereStore();
@@ -147,15 +162,22 @@ export default function EditorPage() {
         <Toolbar />
 
         {/* Canvas area */}
-        <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="flex flex-col flex-1 overflow-hidden relative">
           <Canvas />
+
+          {/* Atmosphere panel — floating overlay (Nimblehold-inspired sun dial) */}
+          {showAtmosphere && (
+            <div className="absolute top-3 right-3 z-50 w-[260px]">
+              <AtmospherePanel />
+            </div>
+          )}
 
           {/* Asset browser — collapsible, 150px when open */}
           <AssetBrowser />
         </div>
 
         {/* Right panel — 280px */}
-        <div className="flex flex-col w-[280px] overflow-hidden border-l border-[#0F3460]">
+        <div className="flex flex-col w-[280px] overflow-hidden border-l border-[#2a3a6a]">
           <div className="flex-1 overflow-y-auto">
             <PropertiesPanel />
           </div>

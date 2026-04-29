@@ -9,6 +9,7 @@ import {
   Crop,
   Grid3X3,
   Sun,
+  CloudSun,
 } from 'lucide-react';
 import { useToolStore } from '@/app/store/toolStore';
 import { useAtmosphereStore } from '@/app/store/atmosphereStore';
@@ -37,10 +38,10 @@ function ToolButton({ icon, label, active, onClick, title }: ToolButtonProps) {
       aria-label={label}
       onClick={onClick}
       className={[
-        'flex items-center justify-center w-11 h-11 rounded transition-colors',
+        'flex items-center justify-center w-11 h-11 rounded transition-all duration-150',
         active
-          ? 'bg-[#0F3460] border border-[#E94560]'
-          : 'bg-[#16213E] hover:bg-[#0F3460] border border-transparent',
+          ? 'bg-amber-900/30 border border-amber-500 text-amber-300 shadow-[0_0_8px_rgba(212,132,74,0.35)]'
+          : 'bg-[#16213E] hover:bg-[#1e2a4a] border border-transparent text-gray-400 hover:text-gray-200',
       ].join(' ')}
     >
       {icon}
@@ -49,7 +50,7 @@ function ToolButton({ icon, label, active, onClick, title }: ToolButtonProps) {
 }
 
 function Divider() {
-  return <div className="w-8 h-px bg-[#0F3460] my-1" />;
+  return <div className="w-8 h-px bg-[#2a3a6a] my-1" />;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -112,7 +113,7 @@ export default function Toolbar() {
   ];
 
   return (
-    <aside className="flex flex-col items-center gap-1 py-3 px-1.5 bg-[#16213E] border-r border-[#0F3460] h-full">
+    <aside className="flex flex-col items-center gap-1 py-3 px-1.5 bg-[#16213E] border-r border-[#2a3a6a] h-full">
       {/* Main tools */}
       {mainTools.map(({ tool, icon, label, shortcut }) => (
         <ToolButton
@@ -143,6 +144,15 @@ export default function Toolbar() {
         active={lightingEnabled}
         onClick={() => updateAtmosphere({ lightingEnabled: !lightingEnabled })}
         title="Toggle Lighting"
+      />
+
+      {/* Atmosphere panel toggle */}
+      <ToolButton
+        icon={<CloudSun {...iconProps} />}
+        label="Atmosphère"
+        active={false}
+        onClick={() => window.dispatchEvent(new CustomEvent('shiremapper:toggle-atmosphere'))}
+        title="Atmosphère & Météo"
       />
     </aside>
   );

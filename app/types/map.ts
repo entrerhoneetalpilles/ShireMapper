@@ -136,6 +136,19 @@ export interface BaseNode {
 // Concrete node types
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Nimblehold-inspired: objects either sit at natural depth relative to
+ * neighbours ("grounded") or float above everything with a cast shadow
+ * showing elevation ("floating").
+ */
+export type PlacementMode = "grounded" | "floating";
+
+/**
+ * Depth layer controls z-order within a layer.
+ * ground → low → mid → high → overhead (mirrors Nimblehold's depth system).
+ */
+export type DepthLayer = "ground" | "low" | "mid" | "high" | "overhead";
+
 export interface ObjectNode extends BaseNode {
   type: "object";
   assetId: string;
@@ -144,7 +157,16 @@ export interface ObjectNode extends BaseNode {
   flipX: boolean;
   flipY: boolean;
   tintColor: string | null;
+  /** Grounded = natural depth stacking; Floating = always above everything */
+  placementMode: PlacementMode;
+  /** Semantic depth layer for automatic z-ordering within a layer */
+  depthLayer: DepthLayer;
+  /** Perceived height above ground — affects shadow length (0 = flat, 3 = tall tower) */
+  elevationHeight: number;
 }
+
+/** Bridge style auto-applied when a road path crosses a water zone */
+export type BridgeStyle = "none" | "stone" | "wooden" | "rope";
 
 export interface PathNode extends BaseNode {
   type: "path";
@@ -156,6 +178,8 @@ export interface PathNode extends BaseNode {
   strokeOpacity: number;
   dashPattern: number[];
   autoFill: PathAutoFill;
+  /** Nimblehold-inspired: bridge style chosen when path crosses water plots */
+  bridgeStyle: BridgeStyle;
 }
 
 export interface PlotNode extends BaseNode {
