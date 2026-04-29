@@ -1,4 +1,26 @@
-import JSZip from 'jszip';
+// ─────────────────────────────────────────────────────────────────────────────
+// Dungeondraft pack importer
+//
+// .dungeondraft_pack files use Godot Engine's PCK binary container format, NOT
+// ZIP. Structure:
+//
+//   [0]  uint32 LE  magic = 0x43504447  ("GDPC" in memory)
+//   [4]  uint32 LE  pack_version  (1 = Godot 3, 2 = Godot 4)
+//   [8]  uint32 LE  ver_major
+//   [12] uint32 LE  ver_minor
+//   [16] uint32 LE  ver_patch
+//   [20] uint32[16] reserved (64 bytes, all zeros)
+//   [84] uint32 LE  file_count
+//        [per file]
+//          uint32   path_len  (byte length including null terminator)
+//          uint8[]  path      (UTF-8, null-terminated, starts with "res://")
+//          uint64   offset    (absolute byte offset within this file)
+//          uint64   size      (byte size of data)
+//          uint8[16] md5
+//
+// Godot 4 (pack_version == 2) adds extra fields but Dungeondraft uses
+// Godot 3 so we only fully implement version 1.
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -14,9 +36,8 @@ export interface ImportedPack {
 export interface ImportedAsset {
   id: string;
   name: string;
-  /** Category string as found in the pack (e.g. "Nature", "Buildings") */
   category: string;
-  /** Blob URL — revoke with URL.revokeObjectURL when the pack is removed */
+  /** Blob URL – revoke with URL.revokeObjectURL() when the pack is removed */
   src: string;
   naturalWidth: number;
   naturalHeight: number;
@@ -25,35 +46,89 @@ export interface ImportedAsset {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// .dungeondraft_pack format
+// PCK parser
 // ─────────────────────────────────────────────────────────────────────────────
-//
-// A .dungeondraft_pack is a ZIP archive. Structure:
-//   pack.json                               ← metadata
-//   objects/<PackName>/<Category>/<name>.png ← object sprites
-//   textures/…, portals/…, paths/…          ← ignored for now
-//
-// pack.json may look like:
-// {
-//   "name": "Pack Name",
-//   "id":   "pack_id",
-//   "author": "Author",
-//   "version": "1.0",
-//   "category_order": ["Nature", "Buildings"],
-//   "tags": {
-//     "Nature": { "Trees": ["objects/Pack/Nature/oak.png"] }
-//   }
-// }
-//
-// We support both the tags-based and path-scan approaches so that packs
-// without a proper pack.json still import cleanly.
 
-interface PackJson {
+const PCK_MAGIC = 0x43504447; // bytes G D P C in little-endian uint32
+
+interface PckEntry {
+  /** Full res:// path as stored in the pack, e.g. "res://objects/Pack/Cat/name.png" */
+  path: string;
+  offset: number;
+  size: number;
+}
+
+function parsePckIndex(buffer: ArrayBuffer): { entries: PckEntry[]; packVersion: number } {
+  const view = new DataView(buffer);
+
+  const magic = view.getUint32(0, true);
+  if (magic !== PCK_MAGIC) {
+    const b = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));
+    const hex = Array.from(b).map((x) => x.toString(16).padStart(2, '0')).join(' ');
+    throw new Error(
+      `Format non reconnu (magic: ${hex}). ` +
+        `Assurez-vous que le fichier est bien un .dungeondraft_pack Godot valide.`,
+    );
+  }
+
+  const packVersion = view.getUint32(4, true);
+  // ver_major at 8, ver_minor at 12, ver_patch at 16 — not needed
+
+  // Header size: 4 (magic) + 4 (pack_ver) + 4*3 (versions) + 4*16 (reserved) = 84
+  let cursor = 84;
+
+  // Godot 4 extras: flags (uint32) + files_base (uint64)
+  if (packVersion >= 2) {
+    cursor += 4 + 8;
+  }
+
+  const fileCount = view.getUint32(cursor, true);
+  cursor += 4;
+
+  const decoder = new TextDecoder('utf-8');
+  const entries: PckEntry[] = [];
+
+  for (let i = 0; i < fileCount; i++) {
+    const pathLen = view.getUint32(cursor, true);
+    cursor += 4;
+
+    const pathBytes = new Uint8Array(buffer, cursor, pathLen);
+    // Strip null terminator(s) that Godot appends
+    const path = decoder.decode(pathBytes).replace(/\0+$/, '');
+    cursor += pathLen;
+
+    // offset and size are uint64; convert via BigInt then to number (safe < 2^53)
+    const offset = Number(view.getBigUint64(cursor, true));
+    cursor += 8;
+
+    const size = Number(view.getBigUint64(cursor, true));
+    cursor += 8;
+
+    // MD5 hash — skip
+    cursor += 16;
+
+    // Godot 4 per-file flags
+    if (packVersion >= 2) {
+      cursor += 4;
+    }
+
+    entries.push({ path, offset, size });
+  }
+
+  return { entries, packVersion };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// pack.json schema (Dungeondraft-specific metadata)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface DungeondraftPackJson {
   name?: string;
   id?: string;
   author?: string;
   version?: string;
   category_order?: string[];
+  /** { "CategoryName": { "SubTag": ["res://objects/Pack/Cat/file.png"] } } */
   tags?: Record<string, Record<string, string[]>>;
 }
 
@@ -65,16 +140,22 @@ export async function importDungeondraftPack(
   file: File,
   onProgress?: (done: number, total: number) => void,
 ): Promise<{ pack: ImportedPack; assets: ImportedAsset[] }> {
-  const zip = await JSZip.loadAsync(file);
+  const buffer = await file.arrayBuffer();
 
-  // ── Parse pack.json ─────────────────────────────────────────────────────
-  let meta: PackJson = {};
-  const metaFile = zip.file('pack.json');
-  if (metaFile) {
+  // Parse the PCK index
+  const { entries } = parsePckIndex(buffer);
+
+  // ── Locate and parse pack.json ──────────────────────────────────────────
+  let meta: DungeondraftPackJson = {};
+  const metaEntry = entries.find((e) =>
+    e.path.endsWith('pack.json') || e.path.endsWith('pack.js'),
+  );
+  if (metaEntry) {
     try {
-      meta = JSON.parse(await metaFile.async('text'));
+      const raw = new Uint8Array(buffer, metaEntry.offset, metaEntry.size);
+      meta = JSON.parse(new TextDecoder('utf-8').decode(raw));
     } catch {
-      // continue with empty metadata
+      // Proceed with defaults if JSON is malformed
     }
   }
 
@@ -82,48 +163,56 @@ export async function importDungeondraftPack(
   const packName = meta.name ?? file.name.replace(/\.dungeondraft_pack$/i, '');
   const packAuthor = meta.author ?? 'Unknown';
 
-  // ── Build path→category map from tags ───────────────────────────────────
+  // ── Build path → category map from tags ────────────────────────────────
   const pathToCategory = new Map<string, string>();
   if (meta.tags) {
     for (const [cat, subTags] of Object.entries(meta.tags)) {
       for (const paths of Object.values(subTags)) {
         for (const p of paths) {
-          pathToCategory.set(normalizePath(p), cat);
+          pathToCategory.set(p.toLowerCase(), cat);
         }
       }
     }
   }
 
-  // ── Collect image files (objects only, skip textures/paths) ─────────────
-  const imageEntries: Array<{ path: string; entry: JSZip.JSZipObject }> = [];
-  zip.forEach((relPath, entry) => {
-    if (entry.dir) return;
-    if (!isImagePath(relPath)) return;
-    // Only import object sprites; skip textures, portals, wall tiles, etc.
-    const norm = normalizePath(relPath);
-    if (shouldSkip(norm)) return;
-    imageEntries.push({ path: norm, entry });
+  // ── Collect image entries (objects only) ────────────────────────────────
+  const imageEntries = entries.filter((e) => {
+    const p = e.path.toLowerCase();
+    if (!/\.(png|webp|jpg|jpeg)$/i.test(p)) return false;
+    // Skip textures, portals, paths (line textures), walls
+    const skip = ['/textures/', '/patterns/', '/portals/', '/paths/', '/walls/'];
+    return !skip.some((s) => p.includes(s));
   });
 
-  // ── Extract each image and build assets ──────────────────────────────────
+  if (imageEntries.length === 0) {
+    throw new Error(
+      'Aucun asset image trouvé dans ce pack. ' +
+        `Le pack contient ${entries.length} fichier(s) au total.`,
+    );
+  }
+
+  // ── Extract images and build asset list ────────────────────────────────
   const assets: ImportedAsset[] = [];
   let done = 0;
 
-  for (const { path, entry } of imageEntries) {
-    const mimeType = path.endsWith('.webp') ? 'image/webp'
-      : path.endsWith('.jpg') || path.endsWith('.jpeg') ? 'image/jpeg'
-      : 'image/png';
+  for (const entry of imageEntries) {
+    const ext = entry.path.split('.').pop()?.toLowerCase() ?? 'png';
+    const mime =
+      ext === 'webp' ? 'image/webp' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
 
-    const blob = new Blob([await entry.async('arraybuffer')], { type: mimeType });
+    const data = new Uint8Array(buffer, entry.offset, entry.size);
+    const blob = new Blob([data], { type: mime });
     const src = URL.createObjectURL(blob);
 
     const { width, height } = await loadImageDimensions(src);
 
-    const category = pathToCategory.get(path) ?? deriveCategoryFromPath(path);
-    const name = deriveNameFromPath(path);
+    // Category: from tags map or derived from path
+    const pathLower = entry.path.toLowerCase();
+    const category = pathToCategory.get(pathLower) ?? deriveCategoryFromPath(entry.path);
+    const name = deriveNameFromPath(entry.path);
 
     assets.push({
-      id: `${packId}::${path}`,
+      id: `${packId}::${entry.path}`,
       name,
       category,
       src,
@@ -147,36 +236,32 @@ export async function importDungeondraftPack(
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function normalizePath(p: string): string {
-  return p.replace(/\\/g, '/').toLowerCase().trim();
-}
-
-function isImagePath(p: string): boolean {
-  return /\.(png|webp|jpg|jpeg)$/i.test(p);
-}
-
-const SKIP_PREFIXES = ['textures/', 'patterns/', 'portals/', 'paths/', 'walls/'];
-
-function shouldSkip(normalizedPath: string): boolean {
-  return SKIP_PREFIXES.some((prefix) => normalizedPath.startsWith(prefix));
-}
-
 /**
- * objects/PackName/Category/sub/name.png  →  "Category"
- * objects/Category/name.png               →  "Category"
- * anything else                           →  "Imported"
+ * res://objects/PackName/CategoryName/sub/file.png  →  "CategoryName"
+ * res://objects/CategoryName/file.png               →  "CategoryName"
+ * anything else                                     →  "Imported"
  */
-function deriveCategoryFromPath(normalizedPath: string): string {
-  const parts = normalizedPath.split('/');
-  if (parts[0] === 'objects' && parts.length >= 4) return titleCase(parts[2]);
-  if (parts[0] === 'objects' && parts.length === 3) return titleCase(parts[1]);
+function deriveCategoryFromPath(resPath: string): string {
+  // Strip leading "res://"
+  const path = resPath.replace(/^res:\/\//i, '').replace(/\\/g, '/');
+  const parts = path.split('/');
+
+  if (parts[0]?.toLowerCase() === 'objects') {
+    // objects/PackName/Category/...  → parts[2]
+    if (parts.length >= 4) return titleCase(parts[2]);
+    // objects/Category/...           → parts[1]
+    if (parts.length >= 3) return titleCase(parts[1]);
+  }
+
+  // Fallback: second-to-last path segment
   if (parts.length >= 2) return titleCase(parts[parts.length - 2]);
   return 'Imported';
 }
 
-function deriveNameFromPath(normalizedPath: string): string {
-  const fileName = normalizedPath.split('/').at(-1) ?? normalizedPath;
-  return titleCase(fileName.replace(/\.(png|webp|jpg|jpeg)$/i, '').replace(/[_-]+/g, ' '));
+function deriveNameFromPath(resPath: string): string {
+  const fileName = resPath.split('/').at(-1) ?? resPath;
+  const base = fileName.replace(/\.(png|webp|jpg|jpeg)$/i, '');
+  return titleCase(base.replace(/[_-]+/g, ' '));
 }
 
 function titleCase(s: string): string {
