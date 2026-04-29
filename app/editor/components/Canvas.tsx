@@ -7,6 +7,7 @@ import { useCanvasEngine } from '@/app/hooks/useCanvasEngine';
 import { useHistory } from '@/app/hooks/useHistory';
 import { useKeyboard } from '@/app/hooks/useKeyboard';
 import { useTouchInteraction } from '@/app/hooks/useTouchInteraction';
+import { useIsMobile } from '@/app/hooks/useIsMobile';
 import { SceneManager } from '@/app/lib/pixi/sceneManager';
 import { snapPoint } from '@/app/lib/pixi/snapHelper';
 import { assetManifest } from '@/app/lib/assetManifest';
@@ -143,6 +144,7 @@ export function Canvas() {
 
   const { pushHistory } = useHistory();
   const { spaceHeld, altHeld } = useKeyboard();
+  const isMobile = useIsMobile();
 
   // Keep latest mutable values in refs so touch handlers (stable refs) can
   // read them without being recreated on every render.
@@ -627,12 +629,41 @@ export function Canvas() {
     e.preventDefault();
   }, []);
 
+  const handleMobileDone = useCallback(() => {
+    if (activeTool === 'path') {
+      clearPathPreview();
+      const pts = inProgressPointsRef.current;
+      if (pts.length >= 2) {
+        const newNode = createPathNode(pts, activeLayerId, activePathType);
+        pushHistory();
+        addNode(newNode);
+      }
+    } else if (activeTool === 'plot') {
+      clearPlotPreview();
+      const pts = inProgressPointsRef.current;
+      if (pts.length >= 3) {
+        const newNode = createPlotNode(pts, activeLayerId, activePlotType);
+        pushHistory();
+        addNode(newNode);
+      }
+    }
+    inProgressPointsRef.current = [];
+    setInProgressPoints([]);
+  }, [activeTool, activeLayerId, activePathType, activePlotType, pushHistory, addNode]);
+
+  const handleMobileCancel = useCallback(() => {
+    clearPathPreview();
+    clearPlotPreview();
+    inProgressPointsRef.current = [];
+    setInProgressPoints([]);
+  }, []);
+
   // ─────────────────────────────────────────────────────────────────────────────
 
   return (
     <div
       ref={containerRef}
-      className="flex-1 w-full h-full"
+      className="flex-1 w-full h-full relative"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -644,7 +675,27 @@ export function Canvas() {
         cursor: spaceHeld ? 'grab' : activeTool === 'object' ? 'crosshair' : 'default',
         touchAction: 'none', // prevent browser pinch-zoom and scroll on canvas
       }}
-    />
+    >
+      {/* Floating path/plot completion buttons — mobile only */}
+      {isMobile && (activeTool === 'path' || activeTool === 'plot') && inProgressPoints.length >= 2 && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-3 pointer-events-none">
+          <button
+            className="pointer-events-auto px-5 py-3 rounded-2xl bg-amber-600 text-white text-sm font-semibold shadow-xl active:scale-95 transition-transform"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleMobileDone}
+          >
+            Terminer
+          </button>
+          <button
+            className="pointer-events-auto px-5 py-3 rounded-2xl bg-[#1e2e5a] text-gray-300 text-sm font-semibold shadow-xl active:scale-95 transition-transform border border-[#2a3a6a]"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleMobileCancel}
+          >
+            Annuler
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

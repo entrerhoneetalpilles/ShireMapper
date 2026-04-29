@@ -68,9 +68,14 @@ interface AssetBrowserProps {
    * Use this when rendering inside a MobileBottomSheet.
    */
   embedded?: boolean;
+  /**
+   * Called after the user selects an asset in embedded mode.
+   * Use this to auto-close the sheet and activate the object tool.
+   */
+  onAssetSelect?: () => void;
 }
 
-export default function AssetBrowser({ embedded = false }: AssetBrowserProps) {
+export default function AssetBrowser({ embedded = false, onAssetSelect }: AssetBrowserProps) {
   const activeAssetCategory = useToolStore((s) => s.activeAssetCategory);
   const setActiveAssetCategory = useToolStore((s) => s.setActiveAssetCategory);
   const activeAssetId = useToolStore((s) => s.activeAssetId);
@@ -124,6 +129,7 @@ export default function AssetBrowser({ embedded = false }: AssetBrowserProps) {
                   onSelect={() => {
                     setActiveAssetId(asset.id);
                     setActiveAssetCategory(asset.category);
+                    onAssetSelect?.();
                   }}
                 />
               ))}

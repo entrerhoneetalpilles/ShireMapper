@@ -48,8 +48,17 @@ export class CanvasEngine {
       autoDensity: true,
     });
 
-    // Append the canvas element to the host div.
-    this.container.appendChild(this.app.canvas);
+    // Position the canvas to always fill its container, regardless of the
+    // renderer's logical size. The ResizeObserver keeps renderer ↔ container
+    // in sync; this CSS ensures visual correctness while that sync happens.
+    const canvas = this.app.canvas as HTMLCanvasElement;
+    canvas.style.display = 'block';
+    canvas.style.position = 'absolute';
+    canvas.style.inset = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+
+    this.container.appendChild(canvas);
 
     // Stage hierarchy: grid → viewport (layers) → selection overlay
     this.app.stage.addChild(this.gridContainer);

@@ -53,9 +53,10 @@ export default function EditorPage() {
     return () => window.removeEventListener('shiremapper:toggle-atmosphere', handleToggle);
   }, []);
 
-  // Suppress unused-variable warnings for stores consumed only for side effects
+  const setActiveTool = useToolStore((s) => s.setActiveTool);
+
+  // Suppress unused-variable warning for store consumed only for side effects
   void useAtmosphereStore();
-  void useToolStore();
 
   // ── History ──────────────────────────────────────────────────────────────
   const { undo, redo, canUndo, canRedo } = useHistory();
@@ -213,7 +214,13 @@ export default function EditorPage() {
             onClose={() => setMobileSheet(null)}
             height="60vh"
           >
-            <AssetBrowser embedded />
+            <AssetBrowser
+                embedded
+                onAssetSelect={() => {
+                  setMobileSheet(null);
+                  setActiveTool('object');
+                }}
+              />
           </MobileBottomSheet>
 
           <MobileBottomSheet

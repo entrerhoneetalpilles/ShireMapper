@@ -26,8 +26,11 @@ export function useCanvasEngine(
     const el = containerRef.current;
     if (!el) return;
 
-    const initialWidth = el.clientWidth || 800;
-    const initialHeight = el.clientHeight || 600;
+    // getBoundingClientRect() is more reliable than clientWidth/Height in
+    // flex layouts; falls back to reasonable defaults if called before paint.
+    const rect = el.getBoundingClientRect();
+    const initialWidth = rect.width > 0 ? rect.width : el.clientWidth || 800;
+    const initialHeight = rect.height > 0 ? rect.height : el.clientHeight || 600;
 
     const engine = new CanvasEngine(el, initialWidth, initialHeight);
     engineRef.current = engine;
