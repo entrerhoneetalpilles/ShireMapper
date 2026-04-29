@@ -13,17 +13,6 @@ import {
 import { useToolStore } from '@/app/store/toolStore';
 import type { ToolType } from '@/app/types/map';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MobileToolbar
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface MobileToolbarProps {
-  onOpenAssets: () => void;
-  onOpenLayers: () => void;
-  onOpenAtmosphere: () => void;
-  className?: string;
-}
-
 const TOOLS: Array<{ tool: ToolType; icon: React.ReactNode; label: string }> = [
   { tool: 'select',  icon: <MousePointer size={20} strokeWidth={1.75} />, label: 'Select' },
   { tool: 'object',  icon: <Box          size={20} strokeWidth={1.75} />, label: 'Object' },
@@ -33,27 +22,30 @@ const TOOLS: Array<{ tool: ToolType; icon: React.ReactNode; label: string }> = [
   { tool: 'export',  icon: <Crop         size={20} strokeWidth={1.75} />, label: 'Export' },
 ];
 
+interface MobileToolbarProps {
+  onOpenAssets: () => void;
+  onOpenLayers: () => void;
+  onOpenAtmosphere: () => void;
+}
+
 /**
- * Horizontal bottom toolbar designed for mobile screens.
- * Replaces the vertical left sidebar when viewport < 768 px.
- *
- * Layout (two rows):
- *   Row 1 — 6 drawing tools (scrollable)
- *   Row 2 — Assets | Layers | Atmosphere quick-access buttons
+ * Fixed bottom toolbar for mobile screens (< 768px).
+ * Uses position:fixed so it is always visible regardless of the flex layout
+ * or iOS Safari's 100vh / browser-chrome clipping issues.
+ * Hidden on desktop via a media query on the wrapper in page.tsx.
  */
 export default function MobileToolbar({
   onOpenAssets,
   onOpenLayers,
   onOpenAtmosphere,
-  className,
 }: MobileToolbarProps) {
   const activeTool = useToolStore((s) => s.activeTool);
   const setActiveTool = useToolStore((s) => s.setActiveTool);
 
   return (
     <nav
-      className={['flex flex-col shrink-0 bg-[#16213E] border-t border-[#2a3a6a]', className].filter(Boolean).join(' ')}
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      className="flex flex-col bg-[#16213E] border-t border-[#2a3a6a]"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       {/* Row 1: drawing tools */}
       <div className="flex items-center justify-around px-1 py-1">

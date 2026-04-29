@@ -148,8 +148,13 @@ export default function EditorPage() {
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#1A1A2E]">
-      {/* Header — 48px */}
+    /*
+     * h-dvh = 100dvh (dynamic viewport height) — on iOS Safari, 100vh includes
+     * the browser chrome which causes bottom content to be clipped. dvh adjusts
+     * to the actually-visible viewport. Falls back to h-screen on older browsers.
+     */
+    <div className="flex flex-col h-dvh w-screen overflow-hidden bg-[#1A1A2E]">
+      {/* Header */}
       <Header
         mapName={mapTitle}
         onMapNameChange={handleMapNameChange}
@@ -162,15 +167,20 @@ export default function EditorPage() {
       />
 
       {/* ── Main area ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
+      {/*
+       * On mobile the MobileToolbar is fixed-position (not in flow), so we
+       * add bottom padding equal to the toolbar's height (~80px) to prevent
+       * the canvas from being fully obscured by it.
+       */}
+      <div className="flex flex-1 overflow-hidden min-h-0 pb-[80px] md:pb-0">
 
-        {/* Left toolbar — visible only on md+ (CSS, no JS gate) */}
+        {/* Left toolbar — desktop only */}
         <div className="hidden md:flex">
           <Toolbar />
         </div>
 
         {/* Canvas + floating panels */}
-        <div className="flex flex-col flex-1 overflow-hidden relative">
+        <div className="flex flex-col flex-1 overflow-hidden relative min-w-0">
           <Canvas />
 
           {/* Atmosphere panel: floating overlay, desktop only */}
@@ -180,7 +190,7 @@ export default function EditorPage() {
             </div>
           )}
 
-          {/* Asset browser — desktop only (mobile uses the bottom sheet) */}
+          {/* Asset browser — desktop only */}
           <div className="hidden md:block">
             <AssetBrowser />
           </div>
@@ -195,13 +205,18 @@ export default function EditorPage() {
         </div>
       </div>
 
-      {/* ── Mobile bottom toolbar — always in DOM, CSS-hidden on desktop ──── */}
-      <MobileToolbar
-        className="md:hidden"
-        onOpenAssets={() => setMobileSheet('assets')}
-        onOpenLayers={() => setMobileSheet('layers')}
-        onOpenAtmosphere={() => setMobileSheet('atmosphere')}
-      />
+      {/*
+       * Mobile bottom toolbar — fixed at the bottom of the viewport so it
+       * cannot be hidden by flex layout bugs or iOS Safari's chrome clipping.
+       * The wrapper div is hidden on md+ screens via CSS.
+       */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 md:hidden">
+        <MobileToolbar
+          onOpenAssets={() => setMobileSheet('assets')}
+          onOpenLayers={() => setMobileSheet('layers')}
+          onOpenAtmosphere={() => setMobileSheet('atmosphere')}
+        />
+      </div>
 
       {/* ── Mobile bottom sheets ─────────────────────────────────────────── */}
       <MobileBottomSheet
