@@ -6,7 +6,7 @@ import { useToolStore } from '@/app/store/toolStore';
 import { useCanvasEngine } from '@/app/hooks/useCanvasEngine';
 import { useHistory } from '@/app/hooks/useHistory';
 import { useKeyboard } from '@/app/hooks/useKeyboard';
-import { usePinchZoom } from '@/app/hooks/usePinchZoom';
+import { useTouchInteraction } from '@/app/hooks/useTouchInteraction';
 import { SceneManager } from '@/app/lib/pixi/sceneManager';
 import { snapPoint } from '@/app/lib/pixi/snapHelper';
 import { assetManifest } from '@/app/lib/assetManifest';
@@ -144,9 +144,70 @@ export function Canvas() {
   const { pushHistory } = useHistory();
   const { spaceHeld, altHeld } = useKeyboard();
 
-  // Stable getter so usePinchZoom doesn't need engine in its dep array
-  const engineGetter = useCallback(() => engine, [engine]);
-  const pinch = usePinchZoom(engineGetter);
+  // Keep latest mutable values in refs so touch handlers (stable refs) can
+  // read them without being recreated on every render.
+  const engineRef = useRef(engine);
+  engineRef.current = engine;
+  const activeToolRef = useRef(activeTool);
+  activeToolRef.current = activeTool;
+  const activeAssetIdRef = useRef(activeAssetId);
+  activeAssetIdRef.current = activeAssetId;
+  const activeLayerIdRef = useRef(activeLayerId);
+  activeLayerIdRef.current = activeLayerId;
+  const activePathTypeRef = useRef(activePathType);
+  activePathTypeRef.current = activePathType;
+  const activePlotTypeRef = useRef(activePlotType);
+  activePlotTypeRef.current = activePlotType;
+  const snapEnabledRef = useRef(snapEnabled);
+  snapEnabledRef.current = snapEnabled;
+  const documentRef = useRef(document);
+  documentRef.current = document;
+  const addNodeRef = useRef(addNode);
+  addNodeRef.current = addNode;
+  const setSelectedNodesRef = useRef(setSelectedNodes);
+  setSelectedNodesRef.current = setSelectedNodes;
+  const sceneManagerGetter = useCallback(() => sceneManagerRef.current, []);
+  const engineGetter = useCallback(() => engineRef.current, []);
+
+  // Touch: onTap is called by useTouchInteraction when a finger lifts without
+  // significant movement. We execute the current tool action at those coords.
+  const handleTap = useCallback((screenX: number, screenY: number) => {
+    const eng = engineRef.current;
+    if (!eng) return;
+    const raw = eng.screenToWorld(screenX, screenY);
+    const world = snapPoint(raw.x, raw.y, documentRef.current.settings.grid, snapEnabledRef.current, false);
+    const tool = activeToolRef.current;
+
+    switch (tool) {
+      case 'select': {
+        const nodeId = sceneManagerGetter()?.getNodeAtPosition(world.x, world.y) ?? null;
+        setSelectedNodesRef.current(nodeId ? [nodeId] : []);
+        break;
+      }
+      case 'object': {
+        const assetId = activeAssetIdRef.current;
+        if (!assetId) return;
+        const layerId = activeLayerIdRef.current;
+        const node = createObjectNode(world.x, world.y, assetId, layerId);
+        addNodeRef.current(node);
+        break;
+      }
+      case 'path': {
+        const point: PathPoint = { x: world.x, y: world.y };
+        inProgressPointsRef.current = [...inProgressPointsRef.current, point];
+        setInProgressPoints([...inProgressPointsRef.current]);
+        break;
+      }
+      case 'plot': {
+        const point: PathPoint = { x: world.x, y: world.y };
+        inProgressPointsRef.current = [...inProgressPointsRef.current, point];
+        setInProgressPoints([...inProgressPointsRef.current]);
+        break;
+      }
+    }
+  }, [sceneManagerGetter]);
+
+  const touch = useTouchInteraction(engineGetter, handleTap);
 
   // Scene manager ref
   const sceneManagerRef = useRef<SceneManager | null>(null);
@@ -273,9 +334,12 @@ export function Canvas() {
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!engine) return;
 
-      // Pinch tracking (multi-touch) must run first
-      pinch.onPointerDown(e);
-      if (pinch.isPinching) return;
+      // Touch events (1-finger tap/pan, 2-finger pinch) are handled entirely
+      // by useTouchInteraction — skip mouse handling for them.
+      if (e.pointerType === 'touch') {
+        touch.onPointerDown(e);
+        return;
+      }
 
       const screen = getScreenPosition(e);
       const world = getWorldPosition(e);
@@ -377,7 +441,7 @@ export function Canvas() {
       pushHistory,
       addNode,
       setSelectedNodes,
-      pinch,
+      touch,
     ],
   );
 
@@ -385,9 +449,10 @@ export function Canvas() {
     async (e: React.PointerEvent<HTMLDivElement>) => {
       if (!engine) return;
 
-      // Two-finger pinch/pan takes priority
-      pinch.onPointerMove(e);
-      if (pinch.isPinching) return;
+      if (e.pointerType === 'touch') {
+        touch.onPointerMove(e);
+        return;
+      }
 
       const screen = getScreenPosition(e);
       const world = getWorldPosition(e);
@@ -479,7 +544,7 @@ export function Canvas() {
       getScreenPosition,
       getWorldPosition,
       moveNode,
-      pinch,
+      touch,
     ],
   );
 
@@ -487,7 +552,10 @@ export function Canvas() {
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!engine) return;
 
-      pinch.onPointerUp(e);
+      if (e.pointerType === 'touch') {
+        touch.onPointerUp(e);
+        return;
+      }
 
       if (isPanningRef.current) {
         isPanningRef.current = false;
@@ -568,7 +636,7 @@ export function Canvas() {
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={(e) => pinch.onPointerUp(e)}
+      onPointerCancel={(e) => e.pointerType === 'touch' && touch.onPointerCancel(e)}
       onDoubleClick={handleDoubleClick}
       onWheel={handleWheel}
       onContextMenu={handleContextMenu}

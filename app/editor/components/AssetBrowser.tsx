@@ -62,7 +62,15 @@ function AssetThumb({ asset, isActive, onSelect }: AssetThumbProps) {
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function AssetBrowser() {
+interface AssetBrowserProps {
+  /**
+   * When true, the browser fills its parent (no fixed height, no collapse).
+   * Use this when rendering inside a MobileBottomSheet.
+   */
+  embedded?: boolean;
+}
+
+export default function AssetBrowser({ embedded = false }: AssetBrowserProps) {
   const activeAssetCategory = useToolStore((s) => s.activeAssetCategory);
   const setActiveAssetCategory = useToolStore((s) => s.setActiveAssetCategory);
   const activeAssetId = useToolStore((s) => s.activeAssetId);
@@ -74,6 +82,59 @@ export default function AssetBrowser() {
   const tabs = assetCategories.length > 0 ? assetCategories : Object.keys(CATEGORY_LABELS);
   const currentAssets: AssetDefinition[] = assetsByCategory[activeAssetCategory] ?? [];
 
+  if (embedded) {
+    // ── Embedded mode (bottom sheet) ─────────────────────────────────────────
+    return (
+      <div className="flex flex-col h-full bg-[#16213E]">
+        {/* Category tabs — scrollable row */}
+        <div className="flex items-center h-10 shrink-0 border-b border-[#2a3a6a] px-2 gap-1 overflow-x-auto scrollbar-none">
+          {tabs.map((cat) => (
+            <button
+              key={cat}
+              title={CATEGORY_LABELS[cat] ?? cat}
+              onClick={() => setActiveAssetCategory(cat)}
+              className={[
+                'px-2.5 py-1 rounded text-xs whitespace-nowrap transition-colors shrink-0',
+                activeAssetCategory === cat
+                  ? 'bg-amber-900/30 text-amber-300 border border-amber-600/50'
+                  : 'text-gray-400 hover:text-amber-200 hover:bg-amber-900/10',
+              ].join(' ')}
+            >
+              {CATEGORY_LABELS[cat] ?? cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Asset grid — wrapping, scrollable */}
+        <div className="flex-1 overflow-y-auto p-3">
+          {currentAssets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-center">
+              <span className="text-3xl opacity-20">🗺️</span>
+              <p className="text-xs text-[#8a8070]">
+                Choisissez une catégorie puis touchez un asset pour le placer
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 gap-2">
+              {currentAssets.map((asset) => (
+                <AssetThumb
+                  key={asset.id}
+                  asset={asset}
+                  isActive={activeAssetId === asset.id}
+                  onSelect={() => {
+                    setActiveAssetId(asset.id);
+                    setActiveAssetCategory(asset.category);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Desktop inline mode ────────────────────────────────────────────────────
   return (
     <div
       className={[

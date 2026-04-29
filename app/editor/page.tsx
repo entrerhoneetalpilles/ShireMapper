@@ -211,9 +211,9 @@ export default function EditorPage() {
             title="Assets"
             isOpen={mobileSheet === 'assets'}
             onClose={() => setMobileSheet(null)}
-            height="55vh"
+            height="60vh"
           >
-            <AssetBrowser />
+            <AssetBrowser embedded />
           </MobileBottomSheet>
 
           <MobileBottomSheet
