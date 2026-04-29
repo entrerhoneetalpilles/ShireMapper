@@ -21,6 +21,7 @@ interface MobileToolbarProps {
   onOpenAssets: () => void;
   onOpenLayers: () => void;
   onOpenAtmosphere: () => void;
+  className?: string;
 }
 
 const TOOLS: Array<{ tool: ToolType; icon: React.ReactNode; label: string }> = [
@@ -44,13 +45,14 @@ export default function MobileToolbar({
   onOpenAssets,
   onOpenLayers,
   onOpenAtmosphere,
+  className,
 }: MobileToolbarProps) {
   const activeTool = useToolStore((s) => s.activeTool);
   const setActiveTool = useToolStore((s) => s.setActiveTool);
 
   return (
     <nav
-      className="flex flex-col shrink-0 bg-[#16213E] border-t border-[#2a3a6a]"
+      className={['flex flex-col shrink-0 bg-[#16213E] border-t border-[#2a3a6a]', className].filter(Boolean).join(' ')}
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       {/* Row 1: drawing tools */}
