@@ -14,6 +14,9 @@ import { Canvas } from '@/app/editor/components/Canvas';
 import PropertiesPanel from '@/app/editor/components/PropertiesPanel';
 import LayersPanel from '@/app/editor/components/LayersPanel';
 import AssetBrowser from '@/app/editor/components/AssetBrowser';
+import MobileToolbar from '@/app/editor/components/MobileToolbar';
+import { MobileBottomSheet } from '@/app/editor/components/MobileBottomSheet';
+import { useIsMobile } from '@/app/hooks/useIsMobile';
 
 const AtmospherePanel = dynamic(
   () => import('@/app/editor/components/AtmospherePanel'),
@@ -36,6 +39,10 @@ export default function EditorPage() {
   const setSelectedNodes = useMapStore((s) => s.setSelectedNodes);
   const nodes = useMapStore((s) => s.document.nodes);
   const layers = useMapStore((s) => s.document.layers);
+
+  // ── Mobile detection + sheet states ─────────────────────────────────────
+  const isMobile = useIsMobile();
+  const [mobileSheet, setMobileSheet] = useState<'assets' | 'layers' | 'atmosphere' | null>(null);
 
   // ── Atmosphere panel visibility ───────────────────────────────────────────
   const [showAtmosphere, setShowAtmosphere] = useState(false);
@@ -156,34 +163,81 @@ export default function EditorPage() {
         canRedo={canRedo}
       />
 
-      {/* Main row */}
+      {/* ── Main area ─────────────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Toolbar — 44px wide */}
-        <Toolbar />
 
-        {/* Canvas area */}
+        {/* Desktop: vertical left toolbar (hidden on mobile) */}
+        {!isMobile && <Toolbar />}
+
+        {/* Canvas + floating panels */}
         <div className="flex flex-col flex-1 overflow-hidden relative">
           <Canvas />
 
-          {/* Atmosphere panel — floating overlay (Nimblehold-inspired sun dial) */}
-          {showAtmosphere && (
+          {/* Atmosphere panel: floating on desktop, sheet on mobile */}
+          {!isMobile && showAtmosphere && (
             <div className="absolute top-3 right-3 z-50 w-[260px]">
               <AtmospherePanel />
             </div>
           )}
 
-          {/* Asset browser — collapsible, 150px when open */}
-          <AssetBrowser />
+          {/* Asset browser: inline on desktop, hidden on mobile (sheet instead) */}
+          {!isMobile && <AssetBrowser />}
         </div>
 
-        {/* Right panel — 280px */}
-        <div className="flex flex-col w-[280px] overflow-hidden border-l border-[#2a3a6a]">
-          <div className="flex-1 overflow-y-auto">
-            <PropertiesPanel />
+        {/* Desktop: right properties + layers panel (hidden on mobile) */}
+        {!isMobile && (
+          <div className="flex flex-col w-[280px] overflow-hidden border-l border-[#2a3a6a]">
+            <div className="flex-1 overflow-y-auto">
+              <PropertiesPanel />
+            </div>
+            <LayersPanel />
           </div>
-          <LayersPanel />
-        </div>
+        )}
       </div>
+
+      {/* ── Mobile bottom toolbar ────────────────────────────────────────── */}
+      {isMobile && (
+        <MobileToolbar
+          onOpenAssets={() => setMobileSheet('assets')}
+          onOpenLayers={() => setMobileSheet('layers')}
+          onOpenAtmosphere={() => setMobileSheet('atmosphere')}
+        />
+      )}
+
+      {/* ── Mobile bottom sheets ─────────────────────────────────────────── */}
+      {isMobile && (
+        <>
+          <MobileBottomSheet
+            title="Assets"
+            isOpen={mobileSheet === 'assets'}
+            onClose={() => setMobileSheet(null)}
+            height="55vh"
+          >
+            <AssetBrowser />
+          </MobileBottomSheet>
+
+          <MobileBottomSheet
+            title="Calques"
+            isOpen={mobileSheet === 'layers'}
+            onClose={() => setMobileSheet(null)}
+            height="60vh"
+          >
+            <LayersPanel />
+            <div className="border-t border-[#2a3a6a] mt-2 pt-2">
+              <PropertiesPanel />
+            </div>
+          </MobileBottomSheet>
+
+          <MobileBottomSheet
+            title="Atmosphère"
+            isOpen={mobileSheet === 'atmosphere'}
+            onClose={() => setMobileSheet(null)}
+            height="75vh"
+          >
+            <AtmospherePanel />
+          </MobileBottomSheet>
+        </>
+      )}
     </div>
   );
 }

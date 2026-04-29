@@ -98,13 +98,13 @@ export default function Header({
 
   return (
     <header className="flex items-center h-12 px-3 bg-[#16213E] border-b border-[#2a3a6a] shrink-0">
-      {/* Left: Logo + tagline */}
-      <div className="flex items-center gap-2 min-w-[160px]">
+      {/* Left: Logo + tagline (tagline hidden on mobile) */}
+      <div className="flex items-center gap-2 min-w-[44px] md:min-w-[160px]">
         <div className="flex flex-col leading-none">
-          <span className="text-amber-400 font-bold text-base tracking-tight select-none">
+          <span className="text-amber-400 font-bold text-sm md:text-base tracking-tight select-none">
             ShireMapper
           </span>
-          <span className="text-[10px] text-amber-600/60 leading-none mt-0.5 select-none">
+          <span className="hidden md:block text-[10px] text-amber-600/60 leading-none mt-0.5 select-none">
             Fantasy Map Editor
           </span>
         </div>
@@ -120,13 +120,13 @@ export default function Header({
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commitEdit}
             onKeyDown={handleKeyDown}
-            className="bg-[#1A1A2E] border border-amber-500/60 text-gray-100 text-sm rounded px-2 py-1 w-56 text-center focus:outline-none focus:border-amber-400"
+            className="bg-[#1A1A2E] border border-amber-500/60 text-gray-100 text-sm rounded px-2 py-1 w-40 md:w-56 text-center focus:outline-none focus:border-amber-400"
           />
         ) : (
           <button
             title="Click to rename map"
             onClick={startEditing}
-            className="text-sm text-gray-200 hover:text-amber-200 px-3 py-1 rounded hover:bg-amber-900/20 transition-colors max-w-xs truncate"
+            className="text-sm text-gray-200 hover:text-amber-200 px-2 py-1 rounded hover:bg-amber-900/20 transition-colors max-w-[160px] md:max-w-xs truncate"
           >
             {mapName}
           </button>
@@ -134,24 +134,17 @@ export default function Header({
       </div>
 
       {/* Right: Action buttons */}
-      <div className="flex items-center gap-1 min-w-[160px] justify-end">
-        <IconButton
-          title="Undo (Ctrl+Z)"
-          onClick={onUndo}
-          disabled={!canUndo}
-        >
-          <Undo size={18} />
-        </IconButton>
-
-        <IconButton
-          title="Redo (Ctrl+Shift+Z)"
-          onClick={onRedo}
-          disabled={!canRedo}
-        >
-          <Redo size={18} />
-        </IconButton>
-
-        <div className="w-px h-6 bg-[#2a3a6a] mx-1" />
+      <div className="flex items-center gap-1 min-w-[44px] md:min-w-[160px] justify-end">
+        {/* Undo/Redo: only on desktop (mobile uses touch gestures or sheet) */}
+        <span className="hidden md:contents">
+          <IconButton title="Undo (Ctrl+Z)" onClick={onUndo} disabled={!canUndo}>
+            <Undo size={18} />
+          </IconButton>
+          <IconButton title="Redo (Ctrl+Shift+Z)" onClick={onRedo} disabled={!canRedo}>
+            <Redo size={18} />
+          </IconButton>
+          <div className="w-px h-6 bg-[#2a3a6a] mx-1" />
+        </span>
 
         <IconButton title="Save (Ctrl+S)" onClick={onSave}>
           <Download size={18} />

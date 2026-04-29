@@ -6,6 +6,7 @@ import { useToolStore } from '@/app/store/toolStore';
 import { useCanvasEngine } from '@/app/hooks/useCanvasEngine';
 import { useHistory } from '@/app/hooks/useHistory';
 import { useKeyboard } from '@/app/hooks/useKeyboard';
+import { usePinchZoom } from '@/app/hooks/usePinchZoom';
 import { SceneManager } from '@/app/lib/pixi/sceneManager';
 import { snapPoint } from '@/app/lib/pixi/snapHelper';
 import { assetManifest } from '@/app/lib/assetManifest';
@@ -143,6 +144,10 @@ export function Canvas() {
   const { pushHistory } = useHistory();
   const { spaceHeld, altHeld } = useKeyboard();
 
+  // Stable getter so usePinchZoom doesn't need engine in its dep array
+  const engineGetter = useCallback(() => engine, [engine]);
+  const pinch = usePinchZoom(engineGetter);
+
   // Scene manager ref
   const sceneManagerRef = useRef<SceneManager | null>(null);
 
@@ -268,6 +273,10 @@ export function Canvas() {
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!engine) return;
 
+      // Pinch tracking (multi-touch) must run first
+      pinch.onPointerDown(e);
+      if (pinch.isPinching) return;
+
       const screen = getScreenPosition(e);
       const world = getWorldPosition(e);
 
@@ -368,12 +377,17 @@ export function Canvas() {
       pushHistory,
       addNode,
       setSelectedNodes,
+      pinch,
     ],
   );
 
   const handlePointerMove = useCallback(
     async (e: React.PointerEvent<HTMLDivElement>) => {
       if (!engine) return;
+
+      // Two-finger pinch/pan takes priority
+      pinch.onPointerMove(e);
+      if (pinch.isPinching) return;
 
       const screen = getScreenPosition(e);
       const world = getWorldPosition(e);
@@ -465,12 +479,15 @@ export function Canvas() {
       getScreenPosition,
       getWorldPosition,
       moveNode,
+      pinch,
     ],
   );
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!engine) return;
+
+      pinch.onPointerUp(e);
 
       if (isPanningRef.current) {
         isPanningRef.current = false;
@@ -551,10 +568,14 @@ export function Canvas() {
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={(e) => pinch.onPointerUp(e)}
       onDoubleClick={handleDoubleClick}
       onWheel={handleWheel}
       onContextMenu={handleContextMenu}
-      style={{ cursor: spaceHeld ? 'grab' : activeTool === 'object' ? 'crosshair' : 'default' }}
+      style={{
+        cursor: spaceHeld ? 'grab' : activeTool === 'object' ? 'crosshair' : 'default',
+        touchAction: 'none', // prevent browser pinch-zoom and scroll on canvas
+      }}
     />
   );
 }

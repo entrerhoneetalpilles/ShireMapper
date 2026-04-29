@@ -26,6 +26,18 @@ body {
 ::-webkit-scrollbar-thumb      { background: var(--sm-border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--sm-accent); }
 
+/* ── Mobile / touch ─────────────────────────────────────────────────────── */
+
+/* Prevent iOS double-tap zoom on interactive elements */
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
+
+/* Prevent overscroll bounce on the overall page (canvas handles its own scroll) */
+html, body {
+  overscroll-behavior: none;
+}
+
 /* ── Utility classes ─────────────────────────────────────────────────────── */
 .cozy-panel {
   background: var(--sm-surface);
