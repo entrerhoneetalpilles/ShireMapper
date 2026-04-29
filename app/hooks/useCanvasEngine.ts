@@ -37,29 +37,31 @@ export function useCanvasEngine(
 
     let destroyed = false;
 
-    engine.init().then(() => {
-      if (destroyed) {
-        // Component unmounted before init finished — clean up immediately.
-        engine.destroy();
-        return;
-      }
-      setIsReady(true);
-    });
-
-    // ── ResizeObserver ───────────────────────────────────────────────────────
+    // ResizeObserver — only wired AFTER init() so the renderer exists.
     const observer = new ResizeObserver((entries) => {
       if (!engineRef.current) return;
       const entry = entries[0];
       if (!entry) return;
-
       const { width, height } = entry.contentRect;
       if (width <= 0 || height <= 0) return;
-
-      const app = engineRef.current.getApp();
-      app.renderer.resize(width, height);
+      engineRef.current.getApp().renderer.resize(width, height);
     });
 
-    observer.observe(el);
+    engine.init().then(() => {
+      if (destroyed) {
+        engine.destroy();
+        return;
+      }
+      // Resize to actual container dimensions now that the renderer exists.
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        engine.getApp().renderer.resize(r.width, r.height);
+      }
+      // Start observing only after init so the first callback never hits a
+      // null renderer.
+      observer.observe(el);
+      setIsReady(true);
+    });
 
     // ── Cleanup ──────────────────────────────────────────────────────────────
     return () => {

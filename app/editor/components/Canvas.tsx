@@ -141,6 +141,7 @@ export function Canvas() {
   const activePathType = useToolStore((s) => s.activePathType);
   const activePlotType = useToolStore((s) => s.activePlotType);
   const snapEnabled = useToolStore((s) => s.snapEnabled);
+  const gridVisible = useToolStore((s) => s.gridVisible);
 
   const { pushHistory } = useHistory();
   const { spaceHeld, altHeld } = useKeyboard();
@@ -162,6 +163,10 @@ export function Canvas() {
   activePlotTypeRef.current = activePlotType;
   const snapEnabledRef = useRef(snapEnabled);
   snapEnabledRef.current = snapEnabled;
+  const gridVisibleRef = useRef(gridVisible);
+  gridVisibleRef.current = gridVisible;
+  const gridSettingsRef = useRef(document.settings.grid);
+  gridSettingsRef.current = document.settings.grid;
   const documentRef = useRef(document);
   documentRef.current = document;
   const addNodeRef = useRef(addNode);
@@ -249,6 +254,33 @@ export function Canvas() {
     };
     // Only run once when engine becomes ready
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isReady, engine]);
+
+  // ── Grid drawing ───────────────────────────────────────────────────────────
+  // drawGrid() is cheap when the viewport hasn't moved: we track the last key
+  // and skip the redraw when nothing changed.
+
+  useEffect(() => {
+    if (!isReady || !engine) return;
+
+    let lastKey = '';
+
+    function tick() {
+      const vp = engine!.getViewportState();
+      const settings = gridSettingsRef.current;
+      const vis = gridVisibleRef.current;
+      const key = `${vp.x.toFixed(1)},${vp.y.toFixed(1)},${vp.scale.toFixed(4)},${vis},${settings.type},${settings.size},${settings.color}`;
+      if (key === lastKey) return;
+      lastKey = key;
+      engine!.drawGrid({ ...settings, visible: vis }, vp.x, vp.y, vp.scale);
+    }
+
+    tick(); // initial draw
+    engine.getApp().ticker.add(tick);
+    return () => {
+      engine!.getApp().ticker.remove(tick);
+      engine!.clearGrid();
+    };
   }, [isReady, engine]);
 
   // ── Sync document changes to scene ────────────────────────────────────────

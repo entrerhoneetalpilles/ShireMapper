@@ -1,18 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useToolStore } from '@/app/store/toolStore';
+import { useImportedAssetsStore } from '@/app/store/importedAssetsStore';
 import { assetsByCategory, assetCategories } from '@/app/lib/assetManifest';
+import ImportPackButton from './ImportPackButton';
 import type { AssetDefinition } from '@/app/types/map';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Category tab labels (display names mapped from raw category keys)
+// Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CATEGORY_LABELS: Record<string, string> = {
+const BUILTIN_LABELS: Record<string, string> = {
   buildings: 'Buildings',
   vegetation: 'Vegetation',
+  terrain: 'Terrain',
   walls: 'Walls',
   furniture: 'Furniture',
   water: 'Water',
@@ -20,6 +23,10 @@ const CATEGORY_LABELS: Record<string, string> = {
   decorative: 'Decorative',
   misc: 'Misc',
 };
+
+function categoryLabel(cat: string): string {
+  return BUILTIN_LABELS[cat] ?? cat;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Asset thumbnail
@@ -40,7 +47,7 @@ function AssetThumb({ asset, isActive, onSelect }: AssetThumbProps) {
         'flex flex-col items-center gap-1 p-1 rounded transition-all duration-150 shrink-0',
         isActive
           ? 'border-2 border-amber-400 bg-amber-900/30 shadow-[0_0_8px_rgba(212,132,74,0.3)]'
-          : 'border-2 border-transparent hover:border-amber-700/50 hover:bg-amber-900/10 hover:shadow-[0_0_6px_rgba(212,132,74,0.15)]',
+          : 'border-2 border-transparent hover:border-amber-700/50 hover:bg-amber-900/10',
       ].join(' ')}
     >
       <img
@@ -51,7 +58,12 @@ function AssetThumb({ asset, isActive, onSelect }: AssetThumbProps) {
         className="w-16 h-16 object-contain rounded"
         draggable={false}
       />
-      <span className={['text-xs truncate max-w-[68px] leading-tight', isActive ? 'text-amber-300' : 'text-gray-400'].join(' ')}>
+      <span
+        className={[
+          'text-xs truncate max-w-[68px] leading-tight',
+          isActive ? 'text-amber-300' : 'text-gray-400',
+        ].join(' ')}
+      >
         {asset.name}
       </span>
     </button>
@@ -63,15 +75,7 @@ function AssetThumb({ asset, isActive, onSelect }: AssetThumbProps) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AssetBrowserProps {
-  /**
-   * When true, the browser fills its parent (no fixed height, no collapse).
-   * Use this when rendering inside a MobileBottomSheet.
-   */
   embedded?: boolean;
-  /**
-   * Called after the user selects an asset in embedded mode.
-   * Use this to auto-close the sheet and activate the object tool.
-   */
   onAssetSelect?: () => void;
 }
 
@@ -81,22 +85,53 @@ export default function AssetBrowser({ embedded = false, onAssetSelect }: AssetB
   const activeAssetId = useToolStore((s) => s.activeAssetId);
   const setActiveAssetId = useToolStore((s) => s.setActiveAssetId);
 
+  const importedAssets = useImportedAssetsStore((s) => s.assets);
+
   const [collapsed, setCollapsed] = useState(false);
 
-  // Use manifest categories, falling back to the CATEGORY_LABELS keys
-  const tabs = assetCategories.length > 0 ? assetCategories : Object.keys(CATEGORY_LABELS);
-  const currentAssets: AssetDefinition[] = assetsByCategory[activeAssetCategory] ?? [];
+  // Merge built-in + imported asset categories
+  const allTabs = useMemo(() => {
+    const importedCats = Array.from(new Set(importedAssets.map((a) => a.category)));
+    const combined = [...assetCategories];
+    for (const cat of importedCats) {
+      if (!combined.includes(cat)) combined.push(cat);
+    }
+    return combined;
+  }, [importedAssets]);
+
+  // Merge built-in + imported assets for the active category
+  const currentAssets = useMemo((): AssetDefinition[] => {
+    const builtin = assetsByCategory[activeAssetCategory] ?? [];
+    const imported = importedAssets
+      .filter((a) => a.category === activeAssetCategory)
+      .map(
+        (a): AssetDefinition => ({
+          id: a.id,
+          name: a.name,
+          category: a.category,
+          src: a.src,
+          naturalWidth: a.naturalWidth,
+          naturalHeight: a.naturalHeight,
+          tags: [a.packName],
+        }),
+      );
+    return [...builtin, ...imported];
+  }, [activeAssetCategory, importedAssets]);
+
+  function handleSelect(assetId: string, category: string) {
+    setActiveAssetId(assetId);
+    setActiveAssetCategory(category);
+    onAssetSelect?.();
+  }
 
   if (embedded) {
-    // ── Embedded mode (bottom sheet) ─────────────────────────────────────────
     return (
       <div className="flex flex-col h-full bg-[#16213E]">
-        {/* Category tabs — scrollable row */}
+        {/* Category tabs */}
         <div className="flex items-center h-10 shrink-0 border-b border-[#2a3a6a] px-2 gap-1 overflow-x-auto scrollbar-none">
-          {tabs.map((cat) => (
+          {allTabs.map((cat) => (
             <button
               key={cat}
-              title={CATEGORY_LABELS[cat] ?? cat}
               onClick={() => setActiveAssetCategory(cat)}
               className={[
                 'px-2.5 py-1 rounded text-xs whitespace-nowrap transition-colors shrink-0',
@@ -105,12 +140,12 @@ export default function AssetBrowser({ embedded = false, onAssetSelect }: AssetB
                   : 'text-gray-400 hover:text-amber-200 hover:bg-amber-900/10',
               ].join(' ')}
             >
-              {CATEGORY_LABELS[cat] ?? cat}
+              {categoryLabel(cat)}
             </button>
           ))}
         </div>
 
-        {/* Asset grid — wrapping, scrollable */}
+        {/* Asset grid */}
         <div className="flex-1 overflow-y-auto p-3">
           {currentAssets.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-2 text-center">
@@ -126,16 +161,15 @@ export default function AssetBrowser({ embedded = false, onAssetSelect }: AssetB
                   key={asset.id}
                   asset={asset}
                   isActive={activeAssetId === asset.id}
-                  onSelect={() => {
-                    setActiveAssetId(asset.id);
-                    setActiveAssetCategory(asset.category);
-                    onAssetSelect?.();
-                  }}
+                  onSelect={() => handleSelect(asset.id, asset.category)}
                 />
               ))}
             </div>
           )}
         </div>
+
+        {/* Import button at the bottom of the sheet */}
+        <ImportPackButton />
       </div>
     );
   }
@@ -145,17 +179,15 @@ export default function AssetBrowser({ embedded = false, onAssetSelect }: AssetB
     <div
       className={[
         'bg-[#16213E] border-t border-[#2a3a6a] flex flex-col transition-all duration-200',
-        collapsed ? 'h-9' : 'h-[150px]',
+        collapsed ? 'h-9' : 'h-[180px]',
       ].join(' ')}
     >
-      {/* Header bar: category tabs + collapse toggle */}
+      {/* Header: category tabs + collapse toggle */}
       <div className="flex items-center h-9 shrink-0 border-b border-[#2a3a6a] px-2 gap-1 overflow-x-auto scrollbar-none">
-        {/* Category tabs */}
         <div className="flex items-center gap-0.5 flex-1">
-          {tabs.map((cat) => (
+          {allTabs.map((cat) => (
             <button
               key={cat}
-              title={CATEGORY_LABELS[cat] ?? cat}
               onClick={() => setActiveAssetCategory(cat)}
               className={[
                 'px-2.5 py-1 rounded text-xs whitespace-nowrap transition-colors',
@@ -164,14 +196,12 @@ export default function AssetBrowser({ embedded = false, onAssetSelect }: AssetB
                   : 'text-gray-400 hover:text-amber-200 hover:bg-amber-900/10',
               ].join(' ')}
             >
-              {CATEGORY_LABELS[cat] ?? cat}
+              {categoryLabel(cat)}
             </button>
           ))}
         </div>
-
-        {/* Collapse toggle */}
         <button
-          title={collapsed ? 'Expand asset browser' : 'Collapse asset browser'}
+          title={collapsed ? 'Expand' : 'Collapse'}
           onClick={() => setCollapsed((c) => !c)}
           className="ml-auto text-gray-500 hover:text-amber-400 transition-colors shrink-0"
         >
@@ -179,30 +209,35 @@ export default function AssetBrowser({ embedded = false, onAssetSelect }: AssetB
         </button>
       </div>
 
-      {/* Asset grid */}
+      {/* Assets row + import button */}
       {!collapsed && (
-        <div className="flex-1 overflow-x-auto overflow-y-hidden">
-          <div className="flex items-center gap-2 px-3 py-1 h-full">
-            {currentAssets.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-1 w-full text-center">
-                <span className="text-2xl opacity-20">🗺️</span>
-                <p className="text-xs text-[#8a8070]">
-                  Choisissez une catégorie puis cliquez sur un asset pour le placer
-                </p>
-              </div>
-            ) : (
-              currentAssets.map((asset) => (
-                <AssetThumb
-                  key={asset.id}
-                  asset={asset}
-                  isActive={activeAssetId === asset.id}
-                  onSelect={() => {
-                    setActiveAssetId(asset.id);
-                    setActiveAssetCategory(asset.category);
-                  }}
-                />
-              ))
-            )}
+        <div className="flex flex-1 overflow-hidden min-h-0">
+          {/* Asset strip */}
+          <div className="flex-1 overflow-x-auto overflow-y-hidden">
+            <div className="flex items-center gap-2 px-3 py-1 h-full">
+              {currentAssets.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-1 w-full text-center">
+                  <span className="text-2xl opacity-20">🗺️</span>
+                  <p className="text-xs text-[#8a8070]">
+                    Sélectionnez une catégorie puis cliquez sur un asset
+                  </p>
+                </div>
+              ) : (
+                currentAssets.map((asset) => (
+                  <AssetThumb
+                    key={asset.id}
+                    asset={asset}
+                    isActive={activeAssetId === asset.id}
+                    onSelect={() => handleSelect(asset.id, asset.category)}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Import button — right side, fixed width */}
+          <div className="w-[160px] shrink-0 border-l border-[#2a3a6a] flex flex-col justify-center p-2">
+            <ImportPackButton />
           </div>
         </div>
       )}

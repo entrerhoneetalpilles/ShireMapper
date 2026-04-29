@@ -153,7 +153,7 @@ export default function EditorPage() {
      * the browser chrome which causes bottom content to be clipped. dvh adjusts
      * to the actually-visible viewport. Falls back to h-screen on older browsers.
      */
-    <div className="flex flex-col h-dvh w-screen overflow-hidden bg-[#1A1A2E]">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#1A1A2E]" style={{ height: '100dvh' }}>
       {/* Header */}
       <Header
         mapName={mapTitle}
